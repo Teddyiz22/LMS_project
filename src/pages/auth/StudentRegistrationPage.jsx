@@ -1,0 +1,36 @@
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import AuthInput from '../../components/auth/AuthInput.jsx'
+import AuthLayout from '../../components/auth/AuthLayout.jsx'
+import PasswordInput from '../../components/auth/PasswordInput.jsx'
+import Button from '../../components/ui/Button.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function StudentRegistrationPage() {
+  const { register } = useAuth()
+  const navigate = useNavigate()
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', confirmPassword: '', terms: false })
+  const [errors, setErrors] = useState({})
+  const [isLoading, setIsLoading] = useState(false)
+  const updateField = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.type === 'checkbox' ? event.target.checked : event.target.value }))
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    const nextErrors = {}
+    if (form.fullName.trim().length < 2) nextErrors.fullName = 'Enter your full name.'
+    if (!emailPattern.test(form.email)) nextErrors.email = 'Enter a valid email address.'
+    if (form.password.length < 8) nextErrors.password = 'Password must be at least 8 characters.'
+    if (form.confirmPassword !== form.password) nextErrors.confirmPassword = 'Passwords do not match.'
+    if (!form.terms) nextErrors.terms = 'You must accept the terms to continue.'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
+    setIsLoading(true)
+    try { await register({ ...form, role: 'student' }); navigate('/student/dashboard', { replace: true }) } finally { setIsLoading(false) }
+  }
+
+  return <AuthLayout description="Create a student account to save courses and track your learning." footer={<>Already have an account? <Link className="font-semibold text-[#2563EB] hover:text-blue-700" to="/login">Sign in</Link></>} title="Join as a student"><form className="space-y-4" noValidate onSubmit={handleSubmit}><AuthInput autoComplete="name" error={errors.fullName} label="Full name" name="fullName" onChange={updateField} placeholder="Alex Morgan" value={form.fullName} /><AuthInput autoComplete="email" error={errors.email} label="Email address" name="email" onChange={updateField} placeholder="you@example.com" type="email" value={form.email} /><PasswordInput autoComplete="new-password" error={errors.password} name="password" onChange={updateField} value={form.password} /><PasswordInput autoComplete="new-password" error={errors.confirmPassword} label="Confirm password" name="confirmPassword" onChange={updateField} value={form.confirmPassword} /><div><label className="flex items-start gap-2 text-sm leading-5 text-[#64748B]"><input checked={form.terms} className="mt-0.5 size-4 rounded border-[#E2E8F0] text-[#2563EB] focus:ring-[#2563EB]" name="terms" onChange={updateField} type="checkbox" />I agree to the demonstration platform terms and privacy policy.</label>{errors.terms && <p className="mt-1.5 text-xs text-[#EF4444]">{errors.terms}</p>}</div><Button className="w-full" isLoading={isLoading} type="submit">Create student account</Button><p className="text-center text-sm text-[#64748B]">Want to teach? <Link className="font-medium text-[#2563EB] hover:text-blue-700" to="/register/teacher">Register as a teacher</Link></p></form></AuthLayout>
+}
+
+export default StudentRegistrationPage
