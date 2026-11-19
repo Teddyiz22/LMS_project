@@ -32,7 +32,8 @@ function LoginPage() {
     setIsLoading(true)
     try {
       const authenticatedUser = await login(form)
-      navigate(location.state?.from?.pathname ?? (authenticatedUser.role === 'student' ? '/student/dashboard' : '/dashboard-preview'), { replace: true })
+      const homeByRole = { student: '/student/dashboard', teacher: '/teacher/dashboard', admin: '/admin' }
+      navigate(location.state?.from?.pathname ?? homeByRole[authenticatedUser.role] ?? '/student/dashboard', { replace: true })
     } catch {
       setFormError('Unable to sign in. Please try again.')
     } finally {

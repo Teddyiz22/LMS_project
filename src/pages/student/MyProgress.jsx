@@ -1,13 +1,104 @@
-import { Award, BookOpenCheck, Clock3 } from 'lucide-react'
+import { Award, BookOpenCheck } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { getMyProgress } from '../../services/studentService.js'
 import LearningActivityChart from '../../components/student/LearningActivityChart.jsx'
 import ProgressBar from '../../components/student/ProgressBar.jsx'
 import StudentStatCard from '../../components/student/StudentStatCard.jsx'
 import Card from '../../components/ui/Card.jsx'
 import PageHeader from '../../components/ui/PageHeader.jsx'
-import { achievements, enrolledCourses, studentStats } from '../../data/studentMockData.js'
+import { ErrorState, LoadingState } from '../../components/ui/AsyncState.jsx'
 
 function MyProgress() {
-  return <div className="space-y-6"><PageHeader breadcrumbs={[{ label: 'Student workspace' }, { label: 'My Progress' }]} description="A clear view of your course completion, learning time, and recent milestones." title="My Progress" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{studentStats.map((stat) => <StudentStatCard key={stat.label} stat={stat} />)}</div><section className="grid gap-6 xl:grid-cols-[1.3fr_1fr]"><Card description="Hours invested in your learning this week." title="Weekly Learning Activity"><LearningActivityChart /></Card><Card description="Your latest learning milestones." title="Achievement Summary"><div className="space-y-5">{achievements.map((achievement) => <div className="flex gap-3" key={achievement.title}><span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[#F59E0B]"><Award className="size-5" aria-hidden="true" /></span><div><p className="text-sm font-semibold text-[#1E293B]">{achievement.title}</p><p className="mt-1 text-sm text-[#64748B]">{achievement.detail}</p></div></div>)}<div className="rounded-lg bg-blue-50 p-3 text-sm text-[#2563EB]">One more completed lesson unlocks your next learning milestone.</div></div></Card></section><Card description="Completion across every enrolled course." title="Course Completion Overview"><div className="space-y-5">{enrolledCourses.map((course) => <article className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center" key={course.id}><div><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium text-[#1E293B]">{course.title}</p><p className="mt-1 text-xs text-[#64748B]">{course.completedLessons} of {course.totalLessons} lessons completed</p></div><span className="text-sm font-semibold text-[#2563EB]">{course.progress}%</span></div><ProgressBar className="mt-2" value={course.progress} /></div><span className="inline-flex items-center gap-1.5 text-xs text-[#64748B]"><BookOpenCheck className="size-4 text-[#22C55E]" aria-hidden="true" />{course.progress === 100 ? 'Completed' : 'In progress'}</span></article>)}</div></Card><p className="flex items-center gap-2 text-xs text-[#64748B]"><Clock3 className="size-3.5" aria-hidden="true" />Progress information is demonstration data and is not connected to a backend.</p></div>
+  const [progressData, setProgressData] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const loadProgress = useCallback(async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await getMyProgress()
+      setProgressData(data)
+    } catch (loadError) {
+      setError(loadError.message || 'The EduFlow API could not be reached.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadProgress() }, [loadProgress])
+
+  const stats = progressData?.stats || []
+  const achievements = progressData?.achievements || []
+  const courses = progressData?.courses || []
+
+  return (
+    <div className="space-y-6">
+      <PageHeader breadcrumbs={[{ label: 'Student workspace' }, { label: 'My Progress' }]} description="A clear view of your course completion, learning time, and recent milestones." title="My Progress" />
+      {isLoading ? (
+        <LoadingState label="Loading your progress…" />
+      ) : error ? (
+        <ErrorState message={error} onRetry={loadProgress} />
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {stats.map((stat) => <StudentStatCard key={stat.label} stat={stat} />)}
+          </div>
+          <section className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
+            <Card description="Hours invested in your learning this week." title="Weekly Learning Activity">
+              <LearningActivityChart data={progressData?.weeklyLearningActivity} />
+            </Card>
+            <Card description="Your latest learning milestones." title="Achievement Summary">
+              {achievements.length > 0 ? (
+                <div className="space-y-5">
+                  {achievements.map((achievement) => (
+                    <div className="flex gap-3" key={achievement.title}>
+                      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[#F59E0B]">
+                        <Award className="size-5" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-[#1E293B]">{achievement.title}</p>
+                        <p className="mt-1 text-sm text-[#64748B]">{achievement.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="rounded-lg bg-blue-50 p-3 text-sm text-[#2563EB]">One more completed lesson unlocks your next learning milestone.</div>
+                </div>
+              ) : (
+                <p className="text-sm text-[#64748B]">Complete lessons and submit assignments to earn achievements.</p>
+              )}
+            </Card>
+          </section>
+          <Card description="Completion across every enrolled course." title="Course Completion Overview">
+            {courses.length > 0 ? (
+              <div className="space-y-5">
+                {courses.map((course) => (
+                  <article className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center" key={course.id}>
+                    <div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-[#1E293B]">{course.title}</p>
+                          <p className="mt-1 text-xs text-[#64748B]">{course.completedLessons} of {course.totalLessons} lessons completed</p>
+                        </div>
+                        <span className="text-sm font-semibold text-[#2563EB]">{course.progress}%</span>
+                      </div>
+                      <ProgressBar className="mt-2" value={course.progress} />
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-[#64748B]">
+                      <BookOpenCheck className="size-4 text-[#22C55E]" aria-hidden="true" />
+                      {course.progress === 100 ? 'Completed' : 'In progress'}
+                    </span>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[#64748B]">No enrolled courses yet.</p>
+            )}
+          </Card>
+        </>
+      )}
+    </div>
+  )
 }
 
 export default MyProgress

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:all": "concurrently --names \"web,api\" --prefix-colors \"cyan,magenta\" \"npm run dev\" \"npm --prefix server run dev\"",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
@@ -28,6 +29,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "babel-plugin-react-compiler": "^1.0.0",
+    "concurrently": "^9.2.5",
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.6"

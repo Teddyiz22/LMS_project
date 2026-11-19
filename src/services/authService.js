@@ -1,24 +1,36 @@
-// Mock service for the frontend-only phase. Replace these functions with Axios
-// requests to the future Express/JWT API; no credentials are verified here.
-const simulateRequest = () => new Promise((resolve) => window.setTimeout(resolve, 650))
+import api from './api.js'
 
-const createMockUser = ({ email, fullName, role = 'student' }) => ({
-  email,
-  fullName: fullName || email.split('@')[0],
-  role,
-})
-
-export async function mockLogin({ email }) {
-  await simulateRequest()
-  return createMockUser({ email })
+// Real auth calls against the EduFlow API. The old mock service accepted any
+// email and password; these calls verify credentials against the database.
+export function registerAccount(payload) {
+  return api.post('/auth/register', {
+    fullName: payload.fullName,
+    email: payload.email,
+    password: payload.password,
+    role: payload.role,
+    title: payload.title || undefined,
+    bio: payload.biography || payload.bio || undefined,
+  })
 }
 
-export async function mockRegister({ email, fullName, role }) {
-  await simulateRequest()
-  return createMockUser({ email, fullName, role })
+export function loginAccount(payload) {
+  return api.post('/auth/login', {
+    email: payload.email,
+    password: payload.password,
+  })
 }
 
-export async function mockRequestPasswordReset() {
-  await simulateRequest()
-  return { message: 'If this account existed, a reset link would be sent.' }
+export function getCurrentUser() {
+  return api.get('/auth/me')
+}
+
+export function requestPasswordReset(payload) {
+  return api.post('/auth/forgot-password', { email: payload.email })
+}
+
+export function changePassword(payload) {
+  return api.post('/auth/change-password', {
+    currentPassword: payload.current,
+    newPassword: payload.next,
+  })
 }

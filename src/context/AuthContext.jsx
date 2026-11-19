@@ -1,58 +1,122 @@
-import { createContext, useContext, useMemo, useState } from 'react'
-import { mockLogin, mockRegister, mockRequestPasswordReset } from '../services/authService.js'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  changePassword as changePasswordRequest,
+  getCurrentUser,
+  loginAccount,
+  registerAccount,
+  requestPasswordReset as requestPasswordResetRequest,
+} from '../services/authService.js'
+import { clearToken, getToken, storeToken } from '../services/api.js'
 
 const AuthContext = createContext(null)
-const persistentStorageKey = 'eduflow_mock_auth_user'
-const sessionStorageKey = 'eduflow_mock_session_user'
 
-function getStoredUser() {
-  try {
-    const storedUser = localStorage.getItem(persistentStorageKey) ?? sessionStorage.getItem(sessionStorageKey)
-    return storedUser ? JSON.parse(storedUser) : null
-  } catch {
-    return null
+// Keys from the old mock auth — removed once so a stale mock session can
+// never look like a real login.
+const LEGACY_KEYS = ['eduflow_mock_auth_user', 'eduflow_mock_session_user']
+
+function normalizeUser(user) {
+  if (!user) return null
+  return {
+    id: user.id,
+    fullName: user.full_name || user.fullName || '',
+    email: user.email,
+    role: user.role,
+    title: user.title || null,
+    bio: user.bio || null,
+    program: user.program || null,
+    avatarUrl: user.avatar_url || user.avatarUrl || null,
+    isActive: user.is_active ?? true,
+    createdAt: user.created_at || user.createdAt || null,
   }
-}
-
-function storeUser(user, remember) {
-  const storage = remember ? localStorage : sessionStorage
-  storage.setItem(remember ? persistentStorageKey : sessionStorageKey, JSON.stringify(user))
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(getStoredUser)
+  const [user, setUser] = useState(null)
+  const [isInitializing, setIsInitializing] = useState(true)
+  const mountedRef = useRef(true)
 
-  const login = async ({ email, password, remember }) => {
-    const authenticatedUser = await mockLogin({ email, password })
-    localStorage.removeItem(persistentStorageKey)
-    sessionStorage.removeItem(sessionStorageKey)
-    storeUser(authenticatedUser, remember)
-    setUser(authenticatedUser)
-    return authenticatedUser
-  }
+  useEffect(() => {
+    mountedRef.current = true
+    try {
+      LEGACY_KEYS.forEach((key) => {
+        localStorage.removeItem(key)
+        sessionStorage.removeItem(key)
+      })
+    } catch {
+      // Ignore storage errors.
+    }
 
-  const register = async ({ email, fullName, password, role, ...profile }) => {
-    const registeredUser = await mockRegister({ email, fullName, password, role, ...profile })
-    storeUser(registeredUser, true)
-    setUser(registeredUser)
-    return registeredUser
-  }
+    const restoreSession = async () => {
+      if (!getToken()) {
+        if (mountedRef.current) setIsInitializing(false)
+        return
+      }
+      try {
+        const { user: currentUser } = await getCurrentUser()
+        if (mountedRef.current) setUser(normalizeUser(currentUser))
+      } catch {
+        clearToken()
+        if (mountedRef.current) setUser(null)
+      } finally {
+        if (mountedRef.current) setIsInitializing(false)
+      }
+    }
+    restoreSession()
 
-  const logout = () => {
-    localStorage.removeItem(persistentStorageKey)
-    sessionStorage.removeItem(sessionStorageKey)
+    return () => { mountedRef.current = false }
+  }, [])
+
+  const login = useCallback(async ({ email, password, remember }) => {
+    const { user: authenticatedUser, token } = await loginAccount({ email, password })
+    storeToken(token, Boolean(remember))
+    const normalized = normalizeUser(authenticatedUser)
+    setUser(normalized)
+    return normalized
+  }, [])
+
+  const register = useCallback(async ({ email, fullName, password, role, ...profile }) => {
+    const { user: registeredUser, token } = await registerAccount({
+      email, fullName, password, role, ...profile,
+    })
+    storeToken(token, true)
+    const normalized = normalizeUser(registeredUser)
+    setUser(normalized)
+    return normalized
+  }, [])
+
+  const logout = useCallback(() => {
+    clearToken()
     setUser(null)
-  }
+  }, [])
+
+  const refreshUser = useCallback(async () => {
+    const { user: currentUser } = await getCurrentUser()
+    const normalized = normalizeUser(currentUser)
+    setUser(normalized)
+    return normalized
+  }, [])
+
+  const requestPasswordReset = useCallback(async ({ email }) => {
+    const result = await requestPasswordResetRequest({ email })
+    return result
+  }, [])
+
+  const changePassword = useCallback(async ({ current, next }) => {
+    const result = await changePasswordRequest({ current, next })
+    return result
+  }, [])
 
   const value = useMemo(() => ({
     user,
     isAuthenticated: Boolean(user),
-    isInitializing: false,
+    isInitializing,
     login,
     logout,
     register,
-    requestPasswordReset: mockRequestPasswordReset,
-  }), [user])
+    refreshUser,
+    requestPasswordReset,
+    changePassword,
+  }), [user, isInitializing, login, logout, register, refreshUser, requestPasswordReset, changePassword])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
